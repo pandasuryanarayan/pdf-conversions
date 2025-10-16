@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Converter</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/gif.js@0.2.0/dist/gif.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+            color: #1f2937;
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4">
+    <div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-2xl text-center">
+        <h1 class="text-3xl font-bold mb-4 text-gray-800">Image Converter</h1>
+        <p class="text-gray-600 mb-6">Upload images and convert them to your desired format.</p>
+
+        <div class="mb-6 flex flex-col items-center">
+            <!-- File Input and Label for first image -->
+            <label for="file-upload" class="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-xl transition duration-300 ease-in-out transform hover:scale-105">
+                <input id="file-upload" type="file" accept="image/*" class="hidden">
+                Choose an Image
+            </label>
+        </div>
+
+        <!-- File information display -->
+        <div id="file-info" class="mt-4 p-4 bg-gray-100 rounded-xl hidden text-left">
+            <h3 class="font-semibold text-gray-700 mb-2">Selected Images:</h3>
+            <ul id="file-list" class="space-y-2"></ul>
+        </div>
+
+        <!-- Add more images button -->
+        <div id="add-more-container" class="hidden mt-4">
+            <label for="add-more-file-upload" class="cursor-pointer bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold py-2 px-4 rounded-full transition duration-300 ease-in-out transform hover:scale-105">
+                <input id="add-more-file-upload" type="file" accept="image/*" class="hidden" multiple>
+                + Add More Images
+            </label>
+        </div>
+
+        <div id="converter-controls" class="hidden flex flex-col sm:flex-row items-center justify-center space-y-4 sm:space-y-0 sm:space-x-4 mb-6 mt-6">
+            <!-- Format Selector -->
+            <div class="relative w-full sm:w-auto">
+                <select id="format-select" class="block appearance-none w-full bg-white border border-gray-300 text-gray-700 py-3 px-4 pr-8 rounded-xl leading-tight focus:outline-none focus:bg-white focus:border-blue-500 transition duration-300">
+                    <option value="image/png">PNG</option>
+                    <option value="image/jpeg">JPEG</option>
+                    <option value="image/webp">WebP</option>
+                    <option value="image/gif">GIF</option>
+                </select>
+                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                    <svg class="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95a1 1 0 0 0 1.414 0l4-4a1 1 0 0 0-1.414-1.414L10 10.586 6.707 7.293a1 1 0 0 0-1.414 1.414l4 4z"/></svg>
+                </div>
+            </div>
+            
+            <!-- Convert Button -->
+            <button id="convert-btn" class="w-full sm:w-auto bg-green-500 hover:bg-green-600 text-white font-semibold py-3 px-6 rounded-xl transition duration-300 ease-in-out transform hover:scale-105">
+                Convert
+            </button>
+        </div>
+
+        <!-- Animated GIF Controls -->
+        <div id="gif-animation-controls" class="hidden mt-4 p-4 bg-gray-100 rounded-xl">
+            <div class="flex flex-col sm:flex-row items-center justify-center space-y-4 sm:space-y-0 sm:space-x-4">
+                <div class="flex items-center space-x-2">
+                    <input type="checkbox" id="gif-loop" class="form-checkbox h-5 w-5 text-purple-600 rounded">
+                    <label for="gif-loop" class="text-gray-700">Loop</label>
+                </div>
+                <div class="relative">
+                    <select id="gif-delay" class="block appearance-none w-full bg-white border border-gray-300 text-gray-700 py-2 px-3 pr-8 rounded-xl leading-tight focus:outline-none focus:bg-white focus:border-blue-500">
+                        <option value="500">0.5s per image</option>
+                        <option value="1000" selected>1s per image</option>
+                        <option value="2000">2s per image</option>
+                        <option value="3000">3s per image</option>
+                    </select>
+                    <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                        <svg class="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95a1 1 0 0 0 1.414 0l4-4a1 1 0 0 0-1.414-1.414L10 10.586 6.707 7.293a1 1 0 0 0-1.414 1.414l4 4z"/></svg>
+                    </div>
+                </div>
+                <button id="animate-btn" class="w-full sm:w-auto bg-pink-500 hover:bg-pink-600 text-white font-semibold py-2 px-4 rounded-xl transition duration-300 ease-in-out transform hover:scale-105">
+                    Animate GIF
+                </button>
+            </div>
+        </div>
+
+        <!-- Preview and Download Section -->
+        <div id="output-section" class="hidden mt-6">
+            <h2 class="text-2xl font-semibold mb-4 text-gray-800">Result</h2>
+            <img id="image-preview" src="#" alt="Converted Image Preview" class="max-w-full h-auto rounded-xl shadow-md mb-4 mx-auto" />
+            <a id="download-link" href="#" download class="inline-block bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-6 rounded-xl transition duration-300 ease-in-out transform hover:scale-105">
+                Download Converted Image
+            </a>
+        </div>
+
+        <!-- Canvas for Conversion (Hidden) -->
+        <canvas id="conversion-canvas" class="hidden"></canvas>
+
+        <!-- Custom Message Box -->
+        <div id="message-box" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center p-4 hidden">
+            <div class="bg-white p-6 rounded-xl shadow-2xl w-full max-w-sm text-center transform transition-transform scale-95">
+                <p id="message-text" class="text-gray-800 font-medium mb-4"></p>
+                <button id="message-close-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-xl transition duration-300 ease-in-out">
+                    OK
+                </button>
+            </div>
+        </div>
+    </div>
+    <script src="converter.js"></script>
+</body>
+</html>
+

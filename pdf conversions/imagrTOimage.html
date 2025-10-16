@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Converter</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+            color: #1f2937;
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4">
+    <div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-2xl text-center">
+        <h1 class="text-3xl font-bold mb-4 text-gray-800">Image Converter</h1>
+        <p class="text-gray-600 mb-6">Upload an image and convert it to your desired format (PNG, JPEG, WebP).</p>
+
+        <div class="mb-6 flex flex-col items-center">
+            <!-- File Input and Label -->
+            <label for="file-upload" class="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-xl transition duration-300 ease-in-out transform hover:scale-105">
+                <input id="file-upload" type="file" accept="image/*" class="hidden">
+                Choose an Image
+            </label>
+        </div>
+
+        <!-- File information display -->
+        <div id="file-info" class="mt-4 p-4 bg-gray-100 rounded-xl hidden text-left">
+            <h3 class="font-semibold text-gray-700 mb-2">File Details:</h3>
+            <p class="text-sm text-gray-600">
+                <span class="font-medium">Name:</span> <span id="file-name"></span>
+            </p>
+            <p class="text-sm text-gray-600">
+                <span class="font-medium">Size:</span> <span id="file-size"></span>
+            </p>
+            <p class="text-sm text-gray-600">
+                <span class="font-medium">Type:</span> <span id="file-type"></span>
+            </p>
+        </div>
+
+        <div id="converter-controls" class="hidden flex flex-col sm:flex-row items-center justify-center space-y-4 sm:space-y-0 sm:space-x-4 mb-6">
+            <!-- Format Selector -->
+            <div class="relative w-full sm:w-auto">
+                <select id="format-select" class="block appearance-none w-full bg-white border border-gray-300 text-gray-700 py-3 px-4 pr-8 rounded-xl leading-tight focus:outline-none focus:bg-white focus:border-blue-500 transition duration-300">
+                    <option value="image/png">PNG</option>
+                    <option value="image/jpeg">JPEG</option>
+                    <option value="image/webp">WebP</option>
+                </select>
+                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                    <svg class="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95a1 1 0 0 0 1.414 0l4-4a1 1 0 0 0-1.414-1.414L10 10.586 6.707 7.293a1 1 0 0 0-1.414 1.414l4 4z"/></svg>
+                </div>
+            </div>
+            
+            <!-- Convert Button -->
+            <button id="convert-btn" class="w-full sm:w-auto bg-green-500 hover:bg-green-600 text-white font-semibold py-3 px-6 rounded-xl transition duration-300 ease-in-out transform hover:scale-105">
+                Convert
+            </button>
+        </div>
+
+        <!-- Preview and Download Section -->
+        <div id="output-section" class="hidden mt-6">
+            <h2 class="text-2xl font-semibold mb-4 text-gray-800">Result</h2>
+            <img id="image-preview" src="#" alt="Converted Image Preview" class="max-w-full h-auto rounded-xl shadow-md mb-4 mx-auto" />
+            <a id="download-link" href="#" download class="inline-block bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-6 rounded-xl transition duration-300 ease-in-out transform hover:scale-105">
+                Download Converted Image
+            </a>
+        </div>
+
+        <!-- Canvas for Conversion (Hidden) -->
+        <canvas id="conversion-canvas" class="hidden"></canvas>
+
+        <!-- Custom Message Box -->
+        <div id="message-box" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center p-4 hidden">
+            <div class="bg-white p-6 rounded-xl shadow-2xl w-full max-w-sm text-center transform transition-transform scale-95">
+                <p id="message-text" class="text-gray-800 font-medium mb-4"></p>
+                <button id="message-close-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-xl transition duration-300 ease-in-out">
+                    OK
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const fileInput = document.getElementById('file-upload');
+            const formatSelect = document.getElementById('format-select');
+            const convertBtn = document.getElementById('convert-btn');
+            const downloadLink = document.getElementById('download-link');
+            const imagePreview = document.getElementById('image-preview');
+            const converterControls = document.getElementById('converter-controls');
+            const outputSection = document.getElementById('output-section');
+            const canvas = document.getElementById('conversion-canvas');
+            const ctx = canvas.getContext('2d');
+            const messageBox = document.getElementById('message-box');
+            const messageText = document.getElementById('message-text');
+            const messageCloseBtn = document.getElementById('message-close-btn');
+
+            const fileInfoContainer = document.getElementById('file-info');
+            const fileNameSpan = document.getElementById('file-name');
+            const fileSizeSpan = document.getElementById('file-size');
+            const fileTypeSpan = document.getElementById('file-type');
+
+            let uploadedImage = new Image();
+
+            const showMessage = (message) => {
+                messageText.textContent = message;
+                messageBox.classList.remove('hidden');
+            };
+
+            messageCloseBtn.addEventListener('click', () => {
+                messageBox.classList.add('hidden');
+            });
+
+            fileInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file && file.type.startsWith('image/')) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        uploadedImage.onload = () => {
+                            // Display file information
+                            const fileSizeKB = (file.size / 1024).toFixed(2);
+                            fileNameSpan.textContent = file.name;
+                            fileSizeSpan.textContent = `${fileSizeKB} KB`;
+                            fileTypeSpan.textContent = file.type;
+                            fileInfoContainer.classList.remove('hidden');
+
+                            converterControls.classList.remove('hidden');
+                            outputSection.classList.add('hidden');
+                            downloadLink.href = '#';
+                            imagePreview.src = '#';
+                        };
+                        uploadedImage.src = event.target.result;
+                    };
+                    reader.readAsDataURL(file);
+                } else {
+                    showMessage('Please upload a valid image file.');
+                    converterControls.classList.add('hidden');
+                    outputSection.classList.add('hidden');
+                    fileInfoContainer.classList.add('hidden');
+                }
+            });
+
+            convertBtn.addEventListener('click', () => {
+                if (!uploadedImage.src) {
+                    showMessage('Please upload an image first.');
+                    return;
+                }
+
+                const selectedFormat = formatSelect.value;
+                
+                // Handle conversions using the native canvas method
+                canvas.width = uploadedImage.naturalWidth;
+                canvas.height = uploadedImage.naturalHeight;
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(uploadedImage, 0, 0);
+
+                const fileExtension = selectedFormat.split('/')[1];
+                const convertedDataUrl = canvas.toDataURL(selectedFormat);
+                
+                imagePreview.src = convertedDataUrl;
+                downloadLink.href = convertedDataUrl;
+                downloadLink.download = `converted-image.${fileExtension}`;
+
+                outputSection.classList.remove('hidden');
+
+                // Show completion message for conversion
+                showMessage('Conversion completed successfully!');
+            });
+            
+            // Add event listener to the download link
+            downloadLink.addEventListener('click', () => {
+                // Show completion message for download
+                showMessage('Download started!');
+            });
+        });
+    </script>
+</body>
+</html>
+

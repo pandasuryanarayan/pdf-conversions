@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>PDF Compressor with Quality Control</title>
+    <style>
+        #dropZone {
+            border: 2px dashed #ccc;
+            padding: 20px;
+            text-align: center;
+            margin: 20px;
+        }
+        .controls {
+            margin: 15px 0;
+        }
+        .quality-slider {
+            width: 300px;
+            margin: 10px;
+        }
+        button {
+            padding: 10px 20px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:disabled {
+            background: #cccccc;
+            cursor: not-allowed;
+        }
+        .loading { 
+            display: none;
+            color: #666;
+            margin-top: 10px;
+        }
+        .error {
+            color: #dc3545;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div id="dropZone">
+        <p>Drag & drop PDF or <input type="file" id="fileInput" accept=".pdf"></p>
+        
+        <div class="controls">
+            <label>Compression Level: <span id="compressionValue">50</span>%</label>
+            <input type="range" class="quality-slider" id="compressionLevel" 
+                   min="0" max="100" value="50">
+        </div>
+        
+        <button id="compressBtn" onclick="handleCompress()" disabled>Compress PDF</button>
+        <div class="loading" id="loading">Processing... <progress value="0" max="1"></progress></div>
+        <div class="error" id="error"></div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    
+    <script>
+        // PDF.js worker setup
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 
+            'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+        const COMPRESSION_CONFIG = {
+            MAX_SCALE_REDUCTION: 0.5,
+            MAX_QUALITY_REDUCTION: 0.6
+        };
+
+        // State management
+        let currentFile = null;
+        let currentCompression = 50;
+        
+        // UI Elements
+        const compressionSlider = document.getElementById('compressionLevel');
+        const compressionValue = document.getElementById('compressionValue');
+        const compressBtn = document.getElementById('compressBtn');
+        const fileInput = document.getElementById('fileInput');
+        const loading = document.getElementById('loading');
+        const error = document.getElementById('error');
+
+        // Event handlers
+        compressionSlider.oninput = function() {
+            currentCompression = parseInt(this.value);
+            compressionValue.textContent = currentCompression;
+        };
+
+        // File handling
+        function handleFileSelect(file) {
+            if (!file || file.type !== 'application/pdf') {
+                showError('Invalid file type - only PDFs are supported');
+                compressBtn.disabled = true;
+                return;
+            }
+            
+            currentFile = file;
+            compressBtn.disabled = false;
+            showError(''); // Clear previous errors
+        }
+
+        // Drag and drop handlers
+        dropZone.ondragover = e => e.preventDefault();
+        dropZone.ondrop = e => {
+            e.preventDefault();
+            handleFileSelect(e.dataTransfer.files[0]);
+        };
+
+        fileInput.onchange = () => handleFileSelect(fileInput.files[0]);
+
+        // Compression handler
+        async function handleCompress() {
+            if (!currentFile) {
+                showError('Please select a PDF file first');
+                return;
+            }
+
+            try {
+                loading.style.display = 'block';
+                compressBtn.disabled = true;
+                
+                const compressedPdf = await processPDF(currentFile);
+                saveAs(compressedPdf, `compressed_${currentFile.name}`);
+            } catch(err) {
+                showError(`Processing failed: ${err.message}`);
+            } finally {
+                loading.style.display = 'none';
+                compressBtn.disabled = false;
+            }
+        }
+
+        // Processing functions
+        async function processPDF(file) {
+            const arrayBuffer = await file.arrayBuffer();
+            const { PDFDocument } = PDFLib;
+            const newPdfDoc = await PDFDocument.create();
+            const srcPdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+            
+            const { scaleFactor, jpegQuality } = calculateCompressionParams(currentCompression);
+            
+            for (let i = 1; i <= srcPdf.numPages; i++) {
+                updateProgress(i/srcPdf.numPages);
+                const page = await srcPdf.getPage(i);
+                const imageData = await renderPageToImage(page, scaleFactor, jpegQuality);
+                await addImageToPdf(newPdfDoc, imageData);
+            }
+
+            return new Blob([await newPdfDoc.save()], { type: 'application/pdf' });
+        }
+
+        function calculateCompressionParams(percentage) {
+            return {
+                scaleFactor: 1 - (percentage/100 * COMPRESSION_CONFIG.MAX_SCALE_REDUCTION),
+                jpegQuality: 1 - (percentage/100 * COMPRESSION_CONFIG.MAX_QUALITY_REDUCTION)
+            };
+        }
+
+        async function renderPageToImage(page, scaleFactor, quality) {
+            const viewport = page.getViewport({ scale: scaleFactor });
+            
+            const canvas = document.createElement('canvas');
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            const ctx = canvas.getContext('2d');
+            
+            await page.render({
+                canvasContext: ctx,
+                viewport: viewport
+            }).promise;
+
+            return new Promise(resolve => 
+                canvas.toBlob(
+                    blob => resolve(blob),
+                    'image/jpeg', 
+                    quality
+                )
+            );
+        }
+
+        async function addImageToPdf(pdfDoc, imageBlob) {
+            const imageBytes = await imageBlob.arrayBuffer();
+            const image = await pdfDoc.embedJpg(imageBytes);
+            const page = pdfDoc.addPage([image.width, image.height]);
+            page.drawImage(image, { 
+                x: 0, 
+                y: 0, 
+                width: image.width, 
+                height: image.height 
+            });
+        }
+
+        // UI helpers
+        function updateProgress(ratio) {
+            loading.querySelector('progress').value = ratio;
+        }
+
+        function showError(message) {
+            error.textContent = message;
+            setTimeout(() => error.textContent = '', 5000);
+        }
+    </script>
+</body>
+</html>
